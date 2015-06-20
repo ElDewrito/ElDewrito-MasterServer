@@ -5,10 +5,10 @@ FROM ubuntu
 MAINTAINER Quinton Marchi
 
 # Install Hiawatha
-RUN apt-get install libxslt 
+RUN apt-get install libxslt wget -y
 RUN wget https://files.tuxhelp.org/hiawatha/hiawatha_9.13_amd64.deb && dpkg -i hiawatha_9.13_amd64.deb
 
-# Remove the default Nginx configuration file
+# Remove the default Hiawatha configuration file
 RUN rm -v /etc/hiawatha/hiawatha.conf
 
 # Copy a configuration file from the current directory
