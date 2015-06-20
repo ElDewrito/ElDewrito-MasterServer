@@ -28,6 +28,12 @@ app.get('/announce', function (req, res) {
 
     var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     var uri = ip + ":" + serverPort;
+    
+    if(shutdown) { // server shutting down so delete its entries from redis
+        client.srem("servers", uri);
+        client.del(uri + ":info");
+        return res.send({ result: { code: 0, msg: "OK" } });
+    }
 
     var req = jsonGet({ host: ip, path: "/", port: serverPort }, function (json) {
         var isError = json.error != undefined ? json.error == "true" : false;
