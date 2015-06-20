@@ -23,12 +23,10 @@ Installation (without Docker)
 =============================
 While Docker is the recommended way to set up the master server there are various ways you can set it up without using separate Docker containers.
 
-- First install Redis, this is required by the master server.
-- Also install node.js and NPM
+- Install Redis, node.js and NPM, these are required by the master server.
 - Once they've been installed change to the node directory and run "npm install"
 - Sit back and wait for the dependencies to install
-- Run "node index.js" to start the master
-- The master can now be accessed at port 8080
+- Run "node index.js" to start the master, it should now be accessible at port 8080
 
 I recommend you setup a nginx forward proxy on port 80 to forward to the node.js application on port 8080, but if you don't want to you can just edit the index.js to run the node.js app on port 80 instead. (make sure to set isRunningBehindProxy to false if you do this!)
 

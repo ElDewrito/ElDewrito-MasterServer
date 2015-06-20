@@ -21,6 +21,9 @@ var isRunningBehindProxy = true;
 var redisHostName = "redis";
 var redisPortNumber = "6379";
 
+// the default port number for this application, if you're using the docker install you should leave this as 8080 and edit the nginx config instead
+var appPortNumber = process.env.PORT || 8080;
+
 // end of configurable options, only edit below if you know what you're doing!
 var express = require('express'),
     http = require('http'),
@@ -55,7 +58,7 @@ function jsonGet(options, callback) {
 
   If shutdown is specified it'll remove the $REMOTE_ADDR:$PORT entry from Redis.
 
-  Game servers should keep contacting the /announce route every two minutes or so to make sure it's entry doesn't expire.
+  Game servers should keep contacting the /announce route every two minutes or so to make sure its entry doesn't expire.
 
   Returns a JSON object like below, letting the client know the status of the announce request
   {
@@ -172,6 +175,6 @@ app.all("/", function (req, res) {
     res.send(welcomeText);
 });
 
-http.createServer(app).listen(process.env.PORT || 8080, function () {
-    console.log('Listening on port ' + (process.env.PORT || 8080));
+http.createServer(app).listen(appPortNumber, function () {
+    console.log('Listening on port ' + appPortNumber);
 });
