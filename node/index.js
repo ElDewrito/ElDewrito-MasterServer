@@ -17,11 +17,11 @@ var welcomeText = "<h1>Hi there.</h1>" +
 // if someone spoofs it they could fill your master with dozens of fake announce requests!
 var isRunningBehindProxy = true;
 
-// the information for the redis server
+// the information for the redis server, the defaults here correspond with the /etc/hosts entries created by Docker
 var redisHostName = "redis";
 var redisPortNumber = "6379";
 
-// the default port number for this application, if you're using the docker install you should leave this as 8080 and edit the nginx config instead
+// the default port number for this application, if you're using the Docker install you should leave this as 8080 and edit the nginx config instead
 var appPortNumber = process.env.PORT || 8080;
 
 // end of configurable options, only edit below if you know what you're doing!
@@ -32,8 +32,6 @@ var express = require('express'),
     async = require('async');
 
 var app = express();
-
-// use host entries created by Docker in /etc/hosts to connect to redis
 var client = redis.createClient(redisPortNumber, redisHostName);
 
 function jsonGet(options, callback) {
