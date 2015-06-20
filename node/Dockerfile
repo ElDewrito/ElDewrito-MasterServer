@@ -2,7 +2,7 @@
 FROM    ubuntu
 
 # File Author / Maintainer
-MAINTAINER Anand Mani Sankar
+MAINTAINER emoose
 
 # Install Node.js and other dependencies
 RUN apt-get update && \
