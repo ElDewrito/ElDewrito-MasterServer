@@ -5,7 +5,7 @@ FROM ubuntu
 MAINTAINER Quinton Marchi
 
 # Install Hiawatha
-RUN apt-get install libxslt wget -y
+RUN apt-get install libxslt1.1 wget -y
 RUN wget https://files.tuxhelp.org/hiawatha/hiawatha_9.13_amd64.deb && dpkg -i hiawatha_9.13_amd64.deb
 
 # Remove the default Hiawatha configuration file
