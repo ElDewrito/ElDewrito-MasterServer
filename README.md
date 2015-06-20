@@ -2,9 +2,11 @@
 
 This implements all the features expected in an ElDewrito master server, in a stable, scalable, production-ready way.
 
-I mainly only call it a sample as others can use this to see how endpoints should function, in case they want to implement their own master server.
+I mainly only call it a sample as others can use this to see how endpoints should function (in case they want to make their own their own master server implementation), and because this implementation hasn't really been tested out properly yet.
 
-However it'll also work fine with next to no changes needed, the master server I'll be operating will run on the same code as this git.
+However it should work fine with next to no changes needed, the master server I'll be operating will be running on the same code as this git, and the git will be kept up to date with any changes I make.
+
+If you want to contribute to it feel free to make a pull request, however letting us know what you're working on first would be best, so that we can discuss it and try figuring out the best way to do it with you.
 
 ## Installation (with Docker)
 
