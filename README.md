@@ -6,10 +6,9 @@ I mainly only call it a sample as others can use this to see how endpoints shoul
 
 However it'll also work fine with next to no changes needed, the master server I'll be operating will run on the same code as this git.
 
-Installation (with Docker)
-=============
-- Install Docker
-- Install Docker-compose
+## Installation (with Docker)
+
+- Install Docker and Docker-compose
 - Change to the main directory of this repo (with the docker-compose.yml file)
 - Run "docker-compose up"
 - Go have a coffee while it sets up the containers, once it's done you should be able to access the master server at port 80.
@@ -19,8 +18,8 @@ This sets up and installs Redis, nginx and node.js automatically, each one runni
 By default it also sets up three separate instances of the main node.js application, with the nginx server set up to load balance between them.
 These instances are all linked to the main Redis database and share the same server list with each other.
 
-Installation (without Docker)
-=============================
+## Installation (without Docker)
+
 While Docker is the recommended way to set up the master server there are various ways you can set it up without using separate Docker containers.
 
 - Install Redis, node.js and NPM, these are required by the master server.
@@ -30,8 +29,8 @@ While Docker is the recommended way to set up the master server there are variou
 
 I recommend you setup a nginx forward proxy on port 80 to forward to the node.js application on port 8080, but if you don't want to you can just edit the index.js to run the node.js app on port 80 instead. (make sure to set isRunningBehindProxy to false if you do this!)
 
-Configuration
-=============
+## Configuration
+
 You can edit various options in the config files inside each folder, node/index.js also has some options near the top of the file.
 
 You should set these config options before running "docker-compose up" for the first time, as changing things inside a Docker container can be troublesome.
