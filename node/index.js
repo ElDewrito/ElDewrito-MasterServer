@@ -93,7 +93,7 @@ app.get('/announce', function (req, res) {
 
         var serverGamePort = json.port || 11774;
 
-        var gamePortIsOpen = true; // to eee: check if game port is accessible
+        var gamePortIsOpen = true; // todo: check if game port is accessible
         if (!gamePortIsOpen) {
             return res.send({result: {code: 3, msg: "Failed to contact game server, are the ports open and forwarded correctly?"}});
         }
