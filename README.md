@@ -36,3 +36,9 @@ You can edit various options in the config files inside each folder, node/index.
 You should set these config options before running "docker-compose up" for the first time, as changing things inside a Docker container can be troublesome.
 
 Note that ElDewrito is set up to re-announce to each master it knows about every 2.5 minutes, setting the serverContactTimeLimit to less than that will cause problems!
+
+## Credits
+
+Thanks to Anand Mani Sankar for his Docker workflow example, helped a lot with packaging this as a Docker container! (his example is available at http://anandmanisankar.com/posts/docker-container-nginx-node-redis-example/ )
+
+Also thanks to GIJames, uplusion23, qmarchi and the rest of the Alligo team for brainstorming the master server idea with us and helping us out with the server browser.
