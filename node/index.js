@@ -193,6 +193,59 @@ app.all("/", function (req, res) {
 
 var jsonParser = bodyParser.json();
 
+/*
+  /stats - used by clients after game ends to record their stats
+  GET parameters:
+  - none
+  
+  POST data: JSON in the format:
+  {
+    "statsVersion": 1,
+    "stats": "{\"gameId\": 122334455, \"kills\": 21, \"deaths\": 0, \"assists\": 1, \"medals\": [\"doublekill\", \"triplekill\", \"overkill\", \"unfreakingbelieveable\"]",
+    "publicKey": "base64 encoded public key",
+    "signature": "base64 encoded signature"
+  }
+  
+  When received by the master, the master should first make sure the stats signature is valid for that public key.
+  Once it's been verified the master can trust that the stats belong to that public key, and the public key itself can be used as an identifier for the user.
+  To make the identifier shorter a hash should be made of the public key (the actual public key data sent by the client unmodified)
+  In ElDewrito we use a SHA256 hash of this key and copy the first 8 bytes of it to serve as the user ID, stats services should use the full hash and allow users to look up players from partial hashes.
+  
+  I chose this method for stats recording for a number of reasons:
+  - We can trust that these stats are from that user, no other user can pretend to be another one unless they steal the private key (security is main priority for a stats system IMO)
+  
+  - This system is decentralized, stats can be sent to multiple master servers at once, none of them needing to know the users secret (eg. needing to hold a users login/password, or in this case the private key)
+  
+  - Everything sent by the client (pubkey, signature, stats data) could be shown publicly, with no risk to the user, allowing them to verify their stats haven't been tampered with by the server operator or others
+  
+  - Future-proof: if every stats server suddenly closed others can easily start new servers
+    stats server owners could even make their database public if they decide to shut down or something, with no security risk by doing so
+    others can import that database and users will be able to update their stats with the same key they used before.
+  
+  - Identifiers based on the public key could be tied with a login system easily (could maybe implement something ingame so that private key holders have to confirm they want a login tied to it though)
+  
+  - As players stats are tied to this public key, and their in-game identifier is tied to it too, banning players based on it could be possible (a la steam IDs)
+   (although they can easily change it they would lose their stats too, hacking to make stats look better is one of the main reasons people hack afaik)
+  
+  Although it does have it's drawbacks:
+  - To sync stats between machines people would have to copy their private key over, some might not be able to do this, but if they can't copy a file it's a wonder that they managed to install ED at all..
+  
+  - If you lose your private key you have no chance of recovering it, stopping you from ever updating your stats again (arrangements can probably be made with stats server owners to move stats to a new key though)
+  
+  - Since stats recording is done by the client it wouldn't take much effort to report fake stats for themselves
+    (It'd take a bit more effort but server-side stats could also have fake stats reported too, but having server-side stats means people can mess with other peoples stats too if they know the user id)
+    I figured if people are going to cheat they will, but with this system there's no way they can mess around with other peoples stats, which is more of a priority than fudging with your own
+    
+  - 
+
+  Returns a JSON object like below, letting the client know the status of the request
+  {
+    "result": {
+      "code": 0,
+      "msg": "OK"
+    }
+  }
+*/
 app.post("/stats", jsonParser, function (req, res) {
     function ReformatKey(isPrivateKey, key) {
         var pos = 0;
@@ -209,10 +262,10 @@ app.post("/stats", jsonParser, function (req, res) {
         return "-----BEGIN " + keyType + "-----\n" + returnKey + "-----END " + keyType + "-----\n";
     }
     if(!isRunningStatsServer)
-        return res.send({result: {code: 1, msg: "Stats are unsupported"}});
+        return res.send({result: {code: 1, msg: "Stats are unsupported on this master server"}});
     
     if(!req.body || !req.body.publicKey || !req.body.signature || !req.body.stats)
-        return res.send({result: {code: 2, msg: "Invalid data"}});
+        return res.send({result: {code: 2, msg: "Invalid stats data"}});
 
     var pubKey = ReformatKey(false, req.body.publicKey);
 
@@ -223,16 +276,21 @@ app.post("/stats", jsonParser, function (req, res) {
     if(!isValidSig) {
         return res.send({result: {code: 3, msg: "Stats signature invalid"}});
 
-    // stats have been verified to be signed by req.body.publicKey
+    // At this point the stats have been verified to be signed by req.body.publicKey
     // SHA256(req.body.publicKey) can be used as an identifier for this user
     // (in eldewrito we only use the first 8 bytes of the hash for in-game uids, it'd be best to use the full hash in your backend though
-    // and use pattern matching on your frontend site, so "af12bcdedebc12af" would match "af12bcdedebc12afbeefcafe1337dead", or whatever the closest hash known to you is)
+    // and use partial hash matching on your frontend site, so "af12bcdedebc12af" would match "af12bcdedebc12afbeefcafe1337dead", or whatever the closest hash known to you is)
     // nobody else can send stats for this user unless they somehow steal the users private key
 
     // here you could send a POST request to your stats server
     // sending req.body.stats to something like http://mydewritostatssite.com/api/updateStats?userId=( SHA256(req.body.publicKey) )
     // req.body.stats is already formatted as JSON, so you can send that directly
     // (of course your updateStats API should have some sort of access control so that only this master server can contact it, etc..)
+    // or you could build in a direct database connection here to store it directly, it's open source code, do with it whatever you like :)
+    
+    // Note that if you want to build a truly trustable system, where players could verify their stats haven't been tampered with etc, you'd have to store everything the client sent as they sent it
+    // (So you'd need to store the signature, public key and the req.body.stats string)
+    // This data could all be shown publicly, allowing players to see that the data on the server was signed by them and proving it hasn't been tampered with
 
     // if you have a login system on your site you could also allow people to claim that SHA256 hash as their own, so stats can be linked to a login/pw
     // could also maybe allow people to upload their cfg to backup priv keys too
