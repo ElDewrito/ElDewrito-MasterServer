@@ -275,6 +275,7 @@ app.post("/stats", jsonParser, function (req, res) {
 
     if(!isValidSig) {
         return res.send({result: {code: 3, msg: "Stats signature invalid"}});
+    }
 
     // At this point the stats have been verified to be signed by req.body.publicKey
     // SHA256(req.body.publicKey) can be used as an identifier for this user
