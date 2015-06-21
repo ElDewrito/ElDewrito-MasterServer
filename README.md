@@ -8,7 +8,7 @@ However it should work fine with next to no changes needed, the master server I'
 
 If you want to contribute to it feel free to make a pull request, however letting us know what you're working on first would be best, so that we can discuss it and try figuring out the best way to do it with you.
 
-## Installation (with Docker)
+## Installation (with Docker and nginx)
 
 - Install Docker and Docker-compose
 - Change to the main directory of this repo (with the docker-compose.yml file)
@@ -19,6 +19,16 @@ This sets up and installs Redis, nginx and node.js automatically, each one runni
 
 By default it also sets up three separate instances of the main node.js application, with the nginx server set up to load balance between them.
 These instances are all linked to the main Redis database and share the same server list with each other.
+
+## Installation (with Docker and Hiawatha)
+
+- Install Docker and docker-compose
+- Change to the main directory of this repo (with the docker-compose-hiawatha.yml file)
+- Run "docker-compose -f docker-compose-hiawatha.yml up"
+- Go have a Mountain Dew while it sets up the containers, once it's done you should be able to access the master serer at port 80.
+
+This sets up and install Redis, nginx, and node.js automatically, each one running inside a Docker container.
+Unlike the nginx version, Hiawatha has better performance and security, but without the load balancing.
 
 ## Installation (without Docker)
 
