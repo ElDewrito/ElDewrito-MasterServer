@@ -24,12 +24,17 @@ var redisPortNumber = "6379";
 // the default port number for this application, if you're using the Docker install you should leave this as 8080 and edit the nginx config instead
 var appPortNumber = process.env.PORT || 8080;
 
+// if you run a stats server you should also edit the /stats route below to do something with stats data
+var isRunningStatsServer = false;
+
 // end of configurable options, only edit below if you know what you're doing!
 var express = require('express'),
     http = require('http'),
     request = require('request'),
     redis = require('redis'),
-    async = require('async');
+    async = require('async'),
+    bodyParser = require('body-parser'),
+    crypto = require('crypto');
 
 var app = express();
 var client = redis.createClient(redisPortNumber, redisHostName);
@@ -39,8 +44,14 @@ function jsonGet(options, callback) {
         if (error || response.statusCode !== 200) {
             return callback({error: "true"});
         }
-
-        return callback(JSON.parse(body));
+        var data;
+        try {
+            data = JSON.parse(body);
+        } catch (ex) {
+            console.log("error contacting", options.uri, ":", ex);
+            data = {error: "true"};
+        }
+        return callback(data);
     });
 }
 
@@ -84,6 +95,7 @@ app.get('/announce', function (req, res) {
         client.srem("servers", uri);
         client.del(uri + ":info");
         return res.send({result: {code: 0, msg: "Removed server from list"}});
+        console.log("Removed server", uri);
     }
 
     jsonGet({uri: "http://" + uri + "/", timeout: 10 * 1000}, function (json) {
@@ -106,6 +118,7 @@ app.get('/announce', function (req, res) {
         client.hmset(uri + ":info", {lastUpdate: Math.floor(Date.now() / 1000)});
 
         res.send({result: {code: 0, msg: "Added server to list"}});
+        console.log("Added server", uri);
     });
 });
 
@@ -171,6 +184,57 @@ app.get("/list", function (req, res) {
 
 app.all("/", function (req, res) {
     res.send(welcomeText);
+});
+
+var jsonParser = bodyParser.json();
+
+app.post("/stats", jsonParser, function (req, res) {
+    function ReformatKey(isPrivateKey, key) {
+        var pos = 0;
+        var returnKey = "";
+        while (pos < key.length) {
+            var toCopy = key.length - pos;
+            if (toCopy > 64)
+                toCopy = 64;
+            returnKey += key.substr(pos, toCopy);
+            returnKey += "\n";
+            pos += toCopy;
+        }
+        var keyType = (isPrivateKey ? "RSA PRIVATE KEY" : "PUBLIC KEY"); // public keys don't have RSA in the name some reason
+        return "-----BEGIN " + keyType + "-----\n" + returnKey + "-----END " + keyType + "-----\n";
+    }
+    if(!isRunningStatsServer)
+        return res.send({result: {code: 1, msg: "Stats are unsupported"}});
+    
+    if(!req.body || !req.body.publicKey || !req.body.signature || !req.body.stats)
+        return res.send({result: {code: 2, msg: "Invalid data"}});
+
+    var pubKey = ReformatKey(false, req.body.publicKey);
+
+    var verifier = crypto.createVerify("RSA-SHA256");
+    verifier.update(req.body.stats);
+    var isValidSig = verifier.verify(pubKey, req.body.signature, "base64");
+
+    if(!isValidSig) {
+        return res.send({result: {code: 3, msg: "Stats signature invalid"}});
+
+    // stats have been verified to be signed by req.body.publicKey
+    // SHA256(req.body.publicKey) can be used as an identifier for this user
+    // (in eldewrito we only use the first 8 bytes of the hash for in-game uids, it'd be best to use the full hash in your backend though
+    // and use pattern matching on your frontend site, so "af12bcdedebc12af" would match "af12bcdedebc12afbeefcafe1337dead", or whatever the closest hash known to you is)
+    // nobody else can send stats for this user unless they somehow steal the users private key
+
+    // here you could send a POST request to your stats server
+    // sending req.body.stats to something like http://mydewritostatssite.com/api/updateStats?userId=( SHA256(req.body.publicKey) )
+    // req.body.stats is already formatted as JSON, so you can send that directly
+    // (of course your updateStats API should have some sort of access control so that only this master server can contact it, etc..)
+
+    // if you have a login system on your site you could also allow people to claim that SHA256 hash as their own, so stats can be linked to a login/pw
+    // could also maybe allow people to upload their cfg to backup priv keys too
+
+    // console.log("verified:", isValidSig, req.body);
+
+    res.send({result: {code: 0, msg: "OK"}});
 });
 
 http.createServer(app).listen(appPortNumber, function () {
