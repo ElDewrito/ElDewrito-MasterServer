@@ -136,6 +136,11 @@ app.get('/announce', function (req, res) {
 */
 
 app.get("/list", function (req, res) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Credentials", true);
+    res.header("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type");
+
     var returnData = {listVersion: 1, result: {code: 0, msg: "OK", servers: []}};
 
     client.smembers("servers", function (err, result) {
