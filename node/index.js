@@ -301,6 +301,6 @@ app.post("/stats", jsonParser, function (req, res) {
     res.send({result: {code: 0, msg: "OK"}});
 });
 
-http.createServer(app).listen(appPortNumber, function () {
+http.createServer(app).listen(appPortNumber, "0.0.0.0", function () {
     console.log('Listening on port ' + appPortNumber);
 });
