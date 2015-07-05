@@ -78,15 +78,24 @@ function jsonGet(options, callback) {
   }
 */
 app.get('/announce', function (req, res) {
-    var shutdown = req.query.shutdown !== undefined ? (req.query.shutdown === "true" || req.query.shutdown === "1") : false;
-    var serverPort = req.query.port || 0;
-    if (serverPort === 0) {
+    var shutdown = req.query.shutdown === "true" || req.query.shutdown == 1;
+    
+    if (!req.query.port) {
         return res.send({result: {code: 1, msg: "Invalid parameters, valid parameters are 'port' (int) and 'shutdown' (bool)"}});
+    }
+    var serverPort = +req.query.port;
+    if (isNaN(serverPort) || serverPort < 1024 || serverPort > 65535) {
+      return res.send({result: {code: 4, msg: "Invalid port. A valid port is in the range 1024-65535."}}); //could allow 1-65535
     }
 
     var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     if (!isRunningBehindProxy) {
         ip = req.connection.remoteAddress;
+    }
+    ip = ip.trim();
+
+    if (!/^((25[0-5]|2[0-4]\d|([0-1]?\d)?\d)\.){3}(25[0-5]|2[0-4]\d|([0-1]?\d)?\d)$/.test(ip)) {
+      return res.send({result: {code: 5, msg: "Invalid IP address."}}); //unlikely
     }
 
     var uri = ip + ":" + serverPort;
@@ -94,8 +103,8 @@ app.get('/announce', function (req, res) {
     if (shutdown) { // server shutting down so delete its entries from redis
         client.srem("servers", uri);
         client.del(uri + ":info");
+        console.log("Removed server", uri); //you wanted to actually log this, right?
         return res.send({result: {code: 0, msg: "Removed server from list"}});
-        console.log("Removed server", uri);
     }
 
     jsonGet({uri: "http://" + uri + "/", timeout: 10 * 1000}, function (json) {
@@ -104,7 +113,11 @@ app.get('/announce', function (req, res) {
             return res.send({result: {code: 2, msg: "Failed to retrieve server info JSON from " + uri}});
         }
 
-        var serverGamePort = json.port || 11774;
+        var serverGamePort = +json.port;
+
+        if (isNaN(serverGamePort) || serverGamePort < 1024 || serverGamePort > 66535) {
+          return res.send({result: {code: 4, msg: "Server returned invalid port. A valid port is in the range 1024-65535."}}); //maybe should have unique code, idk
+        }
 
         var gamePortIsOpen = true; // todo: check if game port is accessible
         if (!gamePortIsOpen) {
