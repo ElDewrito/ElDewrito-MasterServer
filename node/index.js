@@ -8,7 +8,7 @@ var welcomeText = "<h1>Hi there.</h1>" +
     "<h3>Useful links</h3>" +
     "<ul><li><a href=\"https://www.reddit.com/r/HaloOnline\">/r/HaloOnline, the Halo Online subreddit</a> - Information about HaloOnline and ElDewrito can be found here.</li>" +
     "<li><a href=\"https://forum.halo.click\">Halo.Click Forums</a> - The official forums for ElDewrito.</li><ul>" +
-    "<p>The source code for this master server can be downloaded from <a href=\"https://gitlab.com/ElDewrito/ElDewrito-MasterServer\">GitLab</a><p>";
+    "<p>The source code for this master server can be downloaded from <a href=\"https://github.com/ElDewrito/ElDewrito-MasterServer\">GitHub</a><p>";
 
 // if you're running this server behind a forward proxy (ie. a caching server, or with nginx hosting the frontend) set this to true
 // this will allow the master server to get the server IP from the X-Forwarded-For header instead of the remote_addr
