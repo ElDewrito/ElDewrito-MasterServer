@@ -25,7 +25,7 @@ These instances are all linked to the main Redis database and share the same ser
 - Install Docker and docker-compose
 - Change to the main directory of this repo (with the docker-compose-hiawatha.yml file)
 - Run "docker-compose -f docker-compose-hiawatha.yml up"
-- Go have a Mountain Dew while it sets up the containers, once it's done you should be able to access the master serer at port 80.
+- Go have a Mountain Dew while it sets up the containers, once it's done you should be able to access the master server at port 80.
 
 This sets up and install Redis, nginx, and node.js automatically, each one running inside a Docker container.
 Unlike the nginx version, Hiawatha has better performance and security, but without the load balancing.
