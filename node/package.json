@@ -6,8 +6,8 @@
   "author": "emoose",
   "license": "AGPL-3.0",
   "repository": {
-    "type" : "git",
-    "url" : "https://gitlab.com/ElDewrito/ElDewrito-MasterServer.git"
+    "type": "git",
+    "url": "https://gitlab.com/ElDewrito/ElDewrito-MasterServer.git"
   },
   "dependencies": {
     "express": ">=4.15.2",
@@ -17,5 +17,8 @@
     "request": ">=2.81.0",
     "async": ">=2.2.0",
     "body-parser": ">=1.17.1"
+  },
+  "devDependencies": {
+    "eslint": "^3.18.0"
   }
 }
