@@ -235,18 +235,18 @@ app.get('/list', (req, res) => {
 
         function isServerAvailable(uri, callback) {
             client.hgetall(uri + ':info', (err, obj) => {
-                // can this be simplified? things i've read from ~2010 say this is the best way
-                if (!obj && obj.lastUpdate) {
-                    return callback(false);
-                }
 
-                var currentTime = Math.floor(Date.now() / 1000);
-                var lastUpdate = parseInt(obj.lastUpdate);
-                if (currentTime - lastUpdate > serverContactTimeLimit) {
-                    return callback(false);
-                }
+                if (Object(obj).lastUpdate) {
 
-                callback(true);
+                    var currentTime = Math.floor(Date.now() / 1000);
+                    var lastUpdate = parseInt(obj.lastUpdate);
+                    if (currentTime - lastUpdate > serverContactTimeLimit) {
+                        return callback(false);
+                    }
+                    callback(true);
+                } else {
+                    callback(false);
+                }
             });
         }
 
