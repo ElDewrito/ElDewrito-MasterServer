@@ -236,7 +236,7 @@ app.get('/list', (req, res) => {
         function isServerAvailable(uri, callback) {
             client.hgetall(uri + ':info', (err, obj) => {
                 // can this be simplified? things i've read from ~2010 say this is the best way
-                if (err || typeof obj === undefined || !obj || typeof obj.lastUpdate === undefined || !obj.lastUpdate || obj.lastUpdate === 0) {
+                if (!obj) {
                     return callback(false);
                 }
 
