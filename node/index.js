@@ -4,11 +4,11 @@ const serverContactTimeLimit = 5 * 60;
 // text sent to anyone who happens to contact the master server outside of ED
 var welcomeText; 
 welcomeText = '<h1>Hi there.</h1>'; 
-welcomeText =  "<p>This is a master server for ElDewrito (a Halo Online fan mod), to use this master server you'll need to use a server browser.</p>"; 
-welcomeText =  '<h3>Useful links</h3>'; 
-welcomeText =  '<ul><li><a href="https://www.reddit.com/r/HaloOnline">/r/HaloOnline, the Halo Online subreddit</a> - Information about HaloOnline and ElDewrito can be found here.</li>'; 
-welcomeText =  '<li><a href="https://forum.halo.click">Halo.Click Forums</a> - The official forums for ElDewrito.</li><ul>'; 
-welcomeText =  '<p>The source code for this master server can be downloaded from <a href="https://github.com/ElDewrito/ElDewrito-MasterServer">GitHub</a><p>';
+welcomeText = "<p>This is a master server for ElDewrito (a Halo Online fan mod), to use this master server you'll need to use a server browser.</p>"; 
+welcomeText = '<h3>Useful links</h3>'; 
+welcomeText = '<ul><li><a href="https://www.reddit.com/r/HaloOnline">/r/HaloOnline, the Halo Online subreddit</a> - Information about HaloOnline and ElDewrito can be found here.</li>'; 
+welcomeText = '<li><a href="https://forum.halo.click">Halo.Click Forums</a> - The official forums for ElDewrito.</li><ul>'; 
+welcomeText = '<p>The source code for this master server can be downloaded from <a href="https://github.com/ElDewrito/ElDewrito-MasterServer">GitHub</a><p>';
 
 /* if you're running this server behind a forward proxy (ie. a caching server, or with nginx hosting the frontend) set this to true
 * this will allow the master server to get the server IP from the X-Forwarded-For header instead of the remote_addr
