@@ -83,7 +83,7 @@ function jsonGet(options, callback) {
   }
 */
 app.get('/announce', (req, res) => {
-    var shutdown = req.query.shutdown === 'true' || req.query.shutdown == 1;
+    var shutdown = req.query.shutdown === 'true' || req.query.shutdown === 1;
 
     if (!req.query.port) {
         return res.send({
