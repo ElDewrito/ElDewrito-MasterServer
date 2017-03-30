@@ -184,7 +184,7 @@ app.get('/announce', (req, res) => {
         console.log('Added server', uri);
     });
 });
-//REVIEW NEEDED: Is this supposed to be JSDoc?
+
 /*
   /list - used by client server browsers to retrieve a list of game servers
   GET parameters:
@@ -349,9 +349,9 @@ app.post('/stats', jsonParser, (req, res) => {
 
     var pubKey = ReformatKey(false, req.body.publicKey);
 
-    var verifier = crypto.createVerify('RSA-SHA256');
+    const verifier = crypto.createVerify('RSA-SHA256');
     verifier.update(req.body.stats);
-    var isValidSig = verifier.verify(pubKey, req.body.signature, 'base64');
+    const isValidSig = verifier.verify(pubKey, req.body.signature, 'base64');
 
     if (!isValidSig) {
         return res.send({
