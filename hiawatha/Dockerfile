@@ -1,12 +1,12 @@
 # Set the base image to Ubuntu
-FROM ubuntu
+FROM ubuntu:14.04
 
 # File Author / Maintainer
 MAINTAINER Quinton Marchi
 
 # Install Hiawatha
-RUN apt-get install libxslt1.1 wget -y
-RUN wget https://files.tuxhelp.org/hiawatha/hiawatha_9.13_amd64.deb && dpkg -i hiawatha_9.13_amd64.deb
+RUN apt-get update && apt-get install libxslt1.1 wget -y
+RUN wget https://mirror.tuxhelp.org/debian/pool/main/h/hiawatha/hiawatha_9.13_amd64.deb && dpkg -i hiawatha_9.13_amd64.deb
 
 # Remove the default Hiawatha configuration file
 RUN rm -v /etc/hiawatha/hiawatha.conf
