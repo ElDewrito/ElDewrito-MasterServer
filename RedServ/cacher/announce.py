@@ -1,8 +1,11 @@
 import json
 import urllib2
+import requests
 
 def wget(url):
     opener = urllib2.build_opener()
+    if "User-Agent" in cherrypy.request.headers:
+        opener.addheaders = [('User-Agent', cherrypy.request.headers["User-Agent"])]
     response = opener.open(url, timeout=1)
     content = response.read()
     return(content)
@@ -46,7 +49,15 @@ def forward_announce(master_servers,port,params,ip):
 
 def index(params,site_data):
     master_servers = [
-    "upstream server here"
+    "http://eldewrito-master-server.red-m.net/announce"
+    # "http://158.69.166.144:8080/announce"
+    #"http://192.99.124.162/announce",
+    #"http://kelly-master.halo.click/announce",
+    #"http://edms.qmarchi.cf/announce",
+    #"http://kyrluckechuck-dewrito-master-server-kyrluckechuck.c9.io/announce",
+    #"http://eldewrito-masterserver-1-thetwist84.c9.io/announce",
+    #"http://eldewrito-masterserver-thetwist84.c9.io/announce",
+    #"https://samantha-master.halo.click/announce"
     ]
     cherrypy.response.headers["content-type"] = "application/json"
     if not "port" in params:

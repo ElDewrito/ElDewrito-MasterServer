@@ -4,6 +4,8 @@ import urllib2
 
 def wget(url):
     opener = urllib2.build_opener()
+    if "User-Agent" in cherrypy.request.headers:
+        opener.addheaders = [('User-Agent', cherrypy.request.headers["User-Agent"])]
     response = opener.open(url, timeout=0.7)
     content = response.read()
     return(content)
@@ -95,7 +97,7 @@ def index(params,site_data):
     output["result"]["servers"] = server_list
     cherrypy.response.headers["content-type"] = "application/json"
     cherrypy.response.headers["Access-Control-Allow-Credentials"] = "true"
-    cherrypy.response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    cherrypy.response.headers["Access-Control-Allow-Headers"] = "Content-Type,X-Player"
     cherrypy.response.headers["Access-Control-Allow-Methods"] = "POST, GET"
     cherrypy.response.headers["Access-Control-Allow-Origin"] = "*"
     return(json.dumps(output))
