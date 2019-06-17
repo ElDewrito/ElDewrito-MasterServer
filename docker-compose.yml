@@ -8,23 +8,13 @@ nginx:
         - "80:80"
 node1:
     build: ./node
-    links:
-        - redis
     ports:
         - "8080"
 node2:
     build: ./node
-    links:
-        - redis
     ports:
         - "8080"
 node3:
     build: ./node
-    links:
-        - redis
     ports:
         - "8080"
-redis:
-    image: redis
-    ports:
-        - "6379"

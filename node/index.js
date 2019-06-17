@@ -1,42 +1,304 @@
-"use strict";
-// if a server hasn't contacted us in this many seconds it's assumed to be offline
-var serverContactTimeLimit = 5 * 60;
+/*
+DECENTRALIZED MASTER SERVER CONCEPT BY WARM_BEER (15-06-2019)
+VERSION 3.2 (17-06-2019)
+BASED ON https://github.com/ElDewrito/ElDewrito-MasterServer BY: medsouz
+Clients would have to sync with one seeder on start to get an entire seeder_list to choose the best seeder from on next start.
+/list and /announcing works just like the original master server.
+*/
 
-// text sent to anyone who happens to contact the master server outside of ED
-var welcomeText = "<h1>Hi there.</h1>" +
-    "<p>This is a master server for ElDewrito (a Halo Online fan mod), to use this master server you'll need to use a server browser.</p>" +
-    "<h3>Useful links</h3>" +
-    "<ul><li><a href=\"https://www.reddit.com/r/HaloOnline\">/r/HaloOnline, the Halo Online subreddit</a> - Information about HaloOnline and ElDewrito can be found here.</li>" +
-    "<p>The source code for this master server can be downloaded from <a href=\"https://github.com/ElDewrito/ElDewrito-MasterServer\">GitHub</a><p>";
+// Only the first identifier checks if another seeder is compatible
+const VERSION = 3.2;
 
-// if you're running this server behind a forward proxy (ie. a caching server, or with nginx hosting the frontend) set this to true
-// this will allow the master server to get the server IP from the X-Forwarded-For header instead of the remote_addr
-// which is needed since a forward proxy would have remote_addr set to the proxies IP, not the server which is contacting us
-// DISABLE THIS IF YOU'RE NOT USING A FORWARD PROXY, the X-Forwarded-For header can be easily spoofed if you don't have a proxy which is setting it
-// if someone spoofs it they could fill your master with dozens of fake announce requests!
-var isRunningBehindProxy = true;
+// Text sent to anyone who happens to contact the master server outside of ED
+const welcomeText = "<h1>Hi there.</h1>" +
+    "<p>This is a running prototype of a master server node for ElDewrito.</p>";
 
-// the information for the redis server, the defaults here correspond with the /etc/hosts entries created by Docker
-var redisHostName = "redis";
-var redisPortNumber = "6379";
+// Set your IP if you are running ElDewrito servers with the same IP
+const MY_IP = "0.0.0.0";
 
-// the default port number for this application, if you're using the Docker install you should leave this as 8080 and edit the nginx config instead
-var appPortNumber = process.env.PORT || 8080;
+// Are you running behind a proxy?
+const isRunningBehindProxy = false;
 
-// if you run a stats server you should also edit the /stats route below to do something with stats data
-var isRunningStatsServer = false;
+// The default port number for this application PORT FORWARD THIS PORT
+const appPortNumber = 8080;
 
-// end of configurable options, only edit below if you know what you're doing!
-var express = require('express'),
+// If a server hasn't contacted us in this many minutes it's assumed to be offline
+const serverContactTimeLimit = 10;
+
+// Interval to refresh the cached_server_list in seconds
+const UPDATE_SERVER_LIST_INTERVAL = 60;
+
+// Interval to sync with other seeders in seconds
+const SYNC_WITH_SEEDERS_INTERVAL = 240;
+
+// Random server announce check when syncing
+const RANDOM_SAMPLE_CHANCE = 0.1;
+const MAX_FALSE_SERVERS = 2;
+
+// Max amount of new seeders checked (added if checked positive) when syncing with another seeder
+const MAX_SEEDER_CHECK = 5;
+
+// Needed to generate key
+const CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+// Initial seeder
+const INITIAL_SEEDER = "thebeerkeg.net/ms";
+
+// End of configurable options, only edit below if you know what you're doing!
+const express = require('express'),
     http = require('http'),
     request = require('request'),
-    redis = require('redis'),
-    async = require('async'),
-    bodyParser = require('body-parser'),
-    crypto = require('crypto');
+    fs = require("fs");
 
-var app = express();
-var client = redis.createClient(redisPortNumber, redisHostName);
+// Don't change this or no one will sync with you
+const KEY_LENGTH = 32;
+
+let seeder_list;
+
+let server_announce_list = [];
+
+let server_list = [];
+
+let cached_server_list = [];
+
+let inactive_seeder_list = [];
+
+let server_keys = [];
+
+let app = express();
+
+function get_seeders_from_file() {
+    seeder_list = JSON.parse(fs.readFileSync('seeders.txt'));
+    if (seeder_list.indexOf(INITIAL_SEEDER) < 0) {
+        seeder_list.push(INITIAL_SEEDER);
+    }
+}
+
+function save_seeders_file() {
+    if (seeder_list !== undefined) {
+        fs.writeFile('seeders.txt', JSON.stringify(seeder_list), (err) => {
+            if (err) throw err;
+        })
+    }
+}
+
+function cleanup_server_keys() {
+    let start = server_keys.length - server_announce_list.length;
+    server_keys = server_keys.splice(start);
+}
+
+function sync_with_seeders() {
+    for (let seeder in seeder_list) {
+        if (inactive_seeder_list.indexOf(seeder_list[seeder]) < 0) {
+            console.log("Checking seeder: " + seeder_list[seeder]);
+            synchronize(seeder_list[seeder]);
+        }
+    }
+    console.log("Finished syncing, saving seeders file");
+    save_seeders_file();
+    cleanup_server_keys();
+    update_server_list();
+}
+
+function add_seeder(seeder) {
+    if(seeder_list.indexOf(seeder) < 0) {
+        console.log("Adding seeder: " + seeder);
+        seeder_list.push(seeder);
+        //console.log("New seeder list: " + seeder_list);
+    }
+}
+
+function remove_seeder(seeder) {
+    if(seeder_list.indexOf(seeder) > -1) {
+        seeder_list = seeder_list.splice(seeder_list.indexOf(seeder), 1);
+        console.log("Removed seeder: " + seeder);
+    }
+}
+
+function server_announce_list_add(server) {
+    if(!key_valid(server.key) || server.key === undefined) {return;}
+    if (server_keys.indexOf(server.key) < 0) {
+        server_announce_list.push(server);
+        server_keys.push(server.key);
+    } else {
+        //console.log("Timestamp already added");
+    }
+}
+
+function version_check(seeder_version) {
+    return (Math.floor(seeder_version) === Math.floor(VERSION));
+}
+
+function synchronize(seeder) {
+    jsonGet({
+        uri: "http://" + seeder + "/sync?port=" + appPortNumber,
+        timeout: 10 * 1000
+    }, function(json) {
+        let isError = json.error !== undefined ? json.error === "true" : false;
+
+        if (isError) {
+            console.log("Inactive seeder: " + seeder);
+            inactive_seeder_list.push(seeder);
+            remove_seeder(seeder);
+            //remove_seeder(seeder);
+            return;
+        }
+
+        let seeder_version = json.seederVersion !== undefined ? json.seederVersion : 0;
+
+        if (!version_check(seeder_version)) {
+            console.log("Different version seeder: " + seeder, "seeder is using V" + seeder_version, "while you are on V" + VERSION);
+            inactive_seeder_list.push(seeder);
+            remove_seeder(seeder);
+            //remove_seeder(seeder);
+            return;
+        }
+
+        synchronize_server_announce_list(json.result.server_announce_list);
+        synchronize_seeder_list(json.result.seeder_list);
+    });
+}
+
+function synchronize_seeder_list(new_seeder_list) {
+    let seeders_checked = 0;
+    for (let new_seeder in new_seeder_list) {
+        let seeder = new_seeder_list[new_seeder];
+        if (seeders_checked > MAX_SEEDER_CHECK) {break;}
+        if (seeder_list.indexOf(seeder) > -1) {continue;}
+        if (check_seeder(seeder)) {
+            add_seeder(seeder);
+        }
+        seeders_checked++;
+    }
+}
+
+function check_max_servers(false_servers) {
+    return (false_servers < MAX_FALSE_SERVERS);
+}
+
+function synchronize_server_announce_list(new_server_announce_list) {
+    let false_servers = 0;
+    for(let new_server_announce in new_server_announce_list) {
+        if (!check_max_servers(false_servers)) {
+            console.log("Stopped syncing, too many false servers!");
+            break;
+        }
+
+        let server = {
+            key: new_server_announce_list[new_server_announce].key,
+            ip: new_server_announce_list[new_server_announce].ip,
+            timestamp: new_server_announce_list[new_server_announce].timestamp
+        };
+
+        if (!!server.ip && !!server.timestamp && !!server.key) {
+            if (server_keys.indexOf(server.key) > -1) {continue;}
+            if(Math.random() < RANDOM_SAMPLE_CHANCE) {
+                console.log("Sample testing server: " + server.ip);
+                if(!ping_game_server(server.ip)) {
+                    false_servers++;
+                    console.log(server.ip + " tested false!")
+                }
+            }
+            server_announce_list_add(server);
+        }
+    }
+}
+
+function update_server_announce_list() {
+    server_announce_list = server_announce_list.filter(check_last_update);
+    update_server_list();
+}
+
+function update_server_list() {
+    server_list = [];
+    for (let announced_server in server_announce_list) {
+        server_list.push(server_announce_list[announced_server].ip);
+    }
+
+    server_list = server_list.filter(distinct);
+    cached_server_list = server_list;
+    //console.log("Updated server_list: " + server_list);
+}
+
+function check_last_update(server) {
+    let currentTime = new Date();
+    let lastUpdate = Date.parse(server.timestamp);
+    let diff = (currentTime - lastUpdate);
+    let diff_in_minutes = Math.round(((diff % 86400000) % 3600000) / 60000);
+    //console.log("Diff in Mins for server: " + server.ip + " is " + diff_in_minutes + " mins");
+
+    if(!(diff_in_minutes < serverContactTimeLimit)) {
+        //console.log("Deleted server: " + server.ip)
+    }
+
+    return (diff_in_minutes < serverContactTimeLimit);
+}
+
+function distinct(value, index, self) {
+    return self.indexOf(value) === index;
+}
+
+function generate_key(length) {
+    let result = '';
+    for (let i = length; i > 0; --i) result += CHARS[Math.floor(Math.random() * CHARS.length)];
+    return result;
+}
+
+function key_valid(key) {
+    if( /[^a-zA-Z0-9]/.test(key) || key.length !== KEY_LENGTH) {
+        console.log('Key is invalid');
+        return false;
+    }
+    return true;
+}
+
+function check_seeder(seeder) {
+    let seeder_works = true;
+
+    jsonGet({
+        uri: "http://" + seeder + "/sync?port=" + appPortNumber,
+        timeout: 10 * 1000
+    }, function(json) {
+        let isError = json.error !== undefined ? json.error === "true" : false;
+
+        if (isError) {
+            seeder_works = false;
+        }
+
+        let seeder_version = json.seederVersion !== undefined ? json.seederVersion : 0;
+
+        if (!version_check(seeder_version)) {
+            seeder_works = false;
+        }
+
+    });
+    return seeder_works;
+}
+
+function ping_game_server(uri) {
+    let server_works = true;
+
+    jsonGet({
+        uri: "http://" + uri + "/",
+        timeout: 10 * 1000
+    }, function(json) {
+        let isError = json.error !== undefined ? json.error === "true" : false;
+        if (isError) {
+            server_works = false;
+            console.log("ERROR pinging: " + uri);
+        }
+
+        let serverGamePort = +json.port;
+
+        if (isNaN(serverGamePort) || serverGamePort < 1024 || serverGamePort > 66535) {
+            console.log("Can't contact server, incorrect game port");
+            server_works = false;
+            console.log("ERROR port: " + uri);
+        }
+
+    });
+    return server_works;
+}
 
 function jsonGet(options, callback) {
     return request(options, function(error, response, body) {
@@ -45,45 +307,78 @@ function jsonGet(options, callback) {
                 error: "true"
             });
         }
-        var data;
+        let data;
         try {
             data = JSON.parse(body);
         } catch (ex) {
             console.log("error contacting", options.uri, ":", ex);
             data = {
-                error: "true"
+                error: "true",
+                message: "Unreachable host."
             };
         }
         return callback(data);
     });
 }
 
-/*
-  /announce - used by game servers to announce their server to this master server
-  GET parameters:
-  - port (int) - port number of the JSON info server
-  - shutdown (bool) - specified if the server is shutting down, to let the master know to remove it
+// Send seeder_list and server_announce_list to other seeders
 
-  This route connects to $REMOTE_ADDR:$PORT and makes sure the JSON info server is accessible
-  then checks if the "port" (game port number) specified in the JSON is accessible
-  If they're both accessible then it adds the server to the Redis database (or updates the lastUpdate time if it already exists)
+app.get("/sync", function(req, res) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Credentials", true);
+    res.header("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type");
 
-  If shutdown is specified it'll remove the $REMOTE_ADDR:$PORT entry from Redis.
+    let ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
 
-  Game servers should keep contacting the /announce route every two minutes or so to make sure its entry doesn't expire.
+    ip = ip.trim();
 
-  Returns a JSON object like below, letting the client know the status of the announce request
-  {
-    "result": {
-      "code": 0,
-      "msg": "OK"
+    if (!isRunningBehindProxy) {
+        ip = req.connection.remoteAddress;
     }
-  }
-*/
+
+    console.log("Seeder: " + ip + " synced with me.");
+
+    if (ip === "127.0.0.1" || ip === "192.168.0.1" || ip === "192.168.1.1") {
+        return res.send({
+            error: true,
+            result: {
+                code: 6,
+                msg: "You don't want to sync with yourself."
+            }
+        }); // This is me
+    }
+
+    console.log(req.query);
+
+    if (!!req.query.port) {
+        let port = req.query.port;
+        ip = ip + ':' + port;
+        add_seeder(ip);
+    } else {
+        console.log("No port given")
+    }
+
+    let returnData = {
+        listVersion: 1,
+        seederVersion: VERSION,
+        result: {
+            code: 0,
+            msg: "OK",
+            server_announce_list: server_announce_list,
+            seeder_list: seeder_list
+        }
+    };
+
+    return res.json(returnData);
+});
+
 app.get('/announce', function(req, res) {
-    var shutdown = req.query.shutdown === "true" || req.query.shutdown == 1;
+
+    console.log("Server announcing...");
 
     if (!req.query.port) {
+        console.log("Server announcing... but no port given");
         return res.send({
             result: {
                 code: 1,
@@ -91,8 +386,12 @@ app.get('/announce', function(req, res) {
             }
         });
     }
-    var serverPort = +req.query.port;
+
+    let ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    let serverPort = +req.query.port;
+
     if (isNaN(serverPort) || serverPort < 1024 || serverPort > 65535) {
+        console.log("Server announcing... but incorrect port");
         return res.send({
             result: {
                 code: 4,
@@ -101,13 +400,17 @@ app.get('/announce', function(req, res) {
         }); //could allow 1-65535
     }
 
-    var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     if (!isRunningBehindProxy) {
         ip = req.connection.remoteAddress;
     }
+
     ip = ip.trim();
+    if(ip === "127.0.0.1" || ip === "192.168.0.1" || ip === "192.168.1.1") {
+        ip = MY_IP;
+    }
 
     if (!/^((25[0-5]|2[0-4]\d|([0-1]?\d)?\d)\.){3}(25[0-5]|2[0-4]\d|([0-1]?\d)?\d)$/.test(ip)) {
+        console.log("Server announcing... but invalid IP");
         return res.send({
             result: {
                 code: 5,
@@ -116,71 +419,14 @@ app.get('/announce', function(req, res) {
         }); //unlikely
     }
 
-    var uri = ip + ":" + serverPort;
+    let uri = ip + ":" + serverPort;
 
-    if (shutdown) { // server shutting down so delete its entries from redis
-        client.srem("servers", uri);
-        client.del(uri + ":info");
-        console.log("Removed server", uri); //you wanted to actually log this, right?
-        return res.send({
-            result: {
-                code: 0,
-                msg: "Removed server from list"
-            }
-        });
+    if(ping_game_server(uri)) {
+        // add ip to our servers
+        let key = generate_key(KEY_LENGTH);
+        server_announce_list_add({key: key, ip: uri, timestamp: new Date().toString()});
+        console.log("Added server", uri, "with key:", key);
     }
-
-    jsonGet({
-        uri: "http://" + uri + "/",
-        timeout: 10 * 1000
-    }, function(json) {
-        var isError = json.error !== undefined ? json.error === "true" : false;
-        if (isError) {
-            return res.send({
-                result: {
-                    code: 2,
-                    msg: "Failed to retrieve server info JSON from " + uri
-                }
-            });
-        }
-
-        var serverGamePort = +json.port;
-
-        if (isNaN(serverGamePort) || serverGamePort < 1024 || serverGamePort > 66535) {
-            return res.send({
-                result: {
-                    code: 4,
-                    msg: "Server returned invalid port. A valid port is in the range 1024-65535."
-                }
-            }); //maybe should have unique code, idk
-        }
-
-        var gamePortIsOpen = true; // todo: check if game port is accessible
-        if (!gamePortIsOpen) {
-            return res.send({
-                result: {
-                    code: 3,
-                    msg: "Failed to contact game server, are the ports open and forwarded correctly?"
-                }
-            });
-        }
-
-        // add ip to our servers set, if it already exists then it'll silently fail
-        client.sadd("servers", uri);
-
-        // add/set the ip/port and current time to the db
-        client.hmset(uri + ":info", {
-            lastUpdate: Math.floor(Date.now() / 1000)
-        });
-
-        res.send({
-            result: {
-                code: 0,
-                msg: "Added server to list"
-            }
-        });
-        console.log("Added server", uri);
-    });
 });
 
 /*
@@ -215,180 +461,30 @@ app.get("/list", function(req, res) {
     res.header("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type");
 
-    var returnData = {
+    let returnData = {
         listVersion: 1,
         result: {
             code: 0,
             msg: "OK",
-            servers: []
+            servers: cached_server_list
         }
     };
 
-    client.smembers("servers", function(err, result) {
-        if (!result) {
-            returnData.result.code = 1;
-            returnData.result.msg = "Unable to query database";
-            return res.send(returnData);
-        }
-
-        function isServerAvailable(uri, callback) {
-            client.hgetall(uri + ":info", function(err, obj) {
-                // can this be simplified? things i've read from ~2010 say this is the best way
-                if (err || typeof obj === undefined || !obj || typeof obj.lastUpdate === undefined || !obj.lastUpdate || obj.lastUpdate === 0) {
-                    return callback(false);
-                }
-
-                var currentTime = Math.floor(Date.now() / 1000);
-                var lastUpdate = parseInt(obj.lastUpdate);
-                if (currentTime - lastUpdate > serverContactTimeLimit) {
-                    return callback(false);
-                }
-
-                callback(true);
-            });
-        }
-
-        async.filter(result, isServerAvailable, function(results) {
-            returnData.result.servers = results;
-            return res.send(returnData);
-        });
-    });
+    return res.send(returnData);
 });
+
+function setup() {
+    get_seeders_from_file();
+    sync_with_seeders();
+    setInterval(update_server_announce_list, 1000 * UPDATE_SERVER_LIST_INTERVAL);
+    setInterval(sync_with_seeders, 1000 * SYNC_WITH_SEEDERS_INTERVAL);
+}
 
 app.all("/", function(req, res) {
     res.send(welcomeText);
 });
 
-var jsonParser = bodyParser.json();
-
-/*
-  /stats - used by clients after game ends to record their stats
-  GET parameters:
-  - none
-  
-  POST data: JSON in the format:
-  {
-    "statsVersion": 1,
-    "stats": "{\"gameId\": 122334455, \"kills\": 21, \"deaths\": 0, \"assists\": 1, \"medals\": [\"doublekill\", \"triplekill\", \"overkill\", \"unfreakingbelieveable\"]",
-    "publicKey": "base64 encoded public key",
-    "signature": "base64 encoded signature"
-  }
-  
-  When received by the master, the master should first make sure the stats signature is valid for that public key.
-  Once it's been verified the master can trust that the stats belong to that public key, and the public key itself can be used as an identifier for the user.
-  To make the identifier shorter a hash should be made of the public key (the actual public key data sent by the client unmodified)
-  In ElDewrito we use a SHA256 hash of this key and copy the first 8 bytes of it to serve as the user ID, stats services should use the full hash and allow users to look up players from partial hashes.
-  
-  I chose this method for stats recording for a number of reasons:
-  - We can trust that these stats are from that user, no other user can pretend to be another one unless they steal the private key (security is main priority for a stats system IMO)
-  
-  - This system is decentralized, stats can be sent to multiple master servers at once, none of them needing to know the users secret (eg. needing to hold a users login/password, or in this case the private key)
-  
-  - Everything sent by the client (pubkey, signature, stats data) could be shown publicly, with no risk to the user, allowing them to verify their stats haven't been tampered with by the server operator or others
-  
-  - Future-proof: if every stats server suddenly closed others can easily start new servers
-    stats server owners could even make their database public if they decide to shut down or something, with no security risk by doing so
-    others can import that database and users will be able to update their stats with the same key they used before.
-  
-  - Identifiers based on the public key could be tied with a login system easily (could maybe implement something ingame so that private key holders have to confirm they want a login tied to it though)
-  
-  - As players stats are tied to this public key, and their in-game identifier is tied to it too, banning players based on it could be possible (a la steam IDs)
-   (although they can easily change it they would lose their stats too, hacking to make stats look better is one of the main reasons people hack afaik)
-  
-  Although it does have it's drawbacks:
-  - To sync stats between machines people would have to copy their private key over, some might not be able to do this, but if they can't copy a file it's a wonder that they managed to install ED at all..
-  
-  - If you lose your private key you have no chance of recovering it, stopping you from ever updating your stats again (arrangements can probably be made with stats server owners to move stats to a new key though)
-  
-  - Since stats recording is done by the client it wouldn't take much effort to report fake stats for themselves
-    (It'd take a bit more effort but server-side stats could also have fake stats reported too, but having server-side stats means people can mess with other peoples stats too if they know the user id)
-    I figured if people are going to cheat they will, but with this system there's no way they can mess around with other peoples stats, which is more of a priority than fudging with your own
-    
-  - 
-
-  Returns a JSON object like below, letting the client know the status of the request
-  {
-    "result": {
-      "code": 0,
-      "msg": "OK"
-    }
-  }
-*/
-app.post("/stats", jsonParser, function(req, res) {
-    function ReformatKey(isPrivateKey, key) {
-        var pos = 0;
-        var returnKey = "";
-        while (pos < key.length) {
-            var toCopy = key.length - pos;
-            if (toCopy > 64)
-                toCopy = 64;
-            returnKey += key.substr(pos, toCopy);
-            returnKey += "\n";
-            pos += toCopy;
-        }
-        var keyType = (isPrivateKey ? "RSA PRIVATE KEY" : "PUBLIC KEY"); // public keys don't have RSA in the name some reason
-        return "-----BEGIN " + keyType + "-----\n" + returnKey + "-----END " + keyType + "-----\n";
-    }
-    if (!isRunningStatsServer)
-        return res.send({
-            result: {
-                code: 1,
-                msg: "Stats are unsupported on this master server"
-            }
-        });
-
-    if (!req.body || !req.body.publicKey || !req.body.signature || !req.body.stats)
-        return res.send({
-            result: {
-                code: 2,
-                msg: "Invalid stats data"
-            }
-        });
-
-    var pubKey = ReformatKey(false, req.body.publicKey);
-
-    var verifier = crypto.createVerify("RSA-SHA256");
-    verifier.update(req.body.stats);
-    var isValidSig = verifier.verify(pubKey, req.body.signature, "base64");
-
-    if (!isValidSig) {
-        return res.send({
-            result: {
-                code: 3,
-                msg: "Stats signature invalid"
-            }
-        });
-    }
-
-    // At this point the stats have been verified to be signed by req.body.publicKey
-    // SHA256(req.body.publicKey) can be used as an identifier for this user
-    // (in eldewrito we only use the first 8 bytes of the hash for in-game uids, it'd be best to use the full hash in your backend though
-    // and use partial hash matching on your frontend site, so "af12bcdedebc12af" would match "af12bcdedebc12afbeefcafe1337dead", or whatever the closest hash known to you is)
-    // nobody else can send stats for this user unless they somehow steal the users private key
-
-    // here you could send a POST request to your stats server
-    // sending req.body.stats to something like http://mydewritostatssite.com/api/updateStats?userId=( SHA256(req.body.publicKey) )
-    // req.body.stats is already formatted as JSON, so you can send that directly
-    // (of course your updateStats API should have some sort of access control so that only this master server can contact it, etc..)
-    // or you could build in a direct database connection here to store it directly, it's open source code, do with it whatever you like :)
-
-    // Note that if you want to build a truly trustable system, where players could verify their stats haven't been tampered with etc, you'd have to store everything the client sent as they sent it
-    // (So you'd need to store the signature, public key and the req.body.stats string)
-    // This data could all be shown publicly, allowing players to see that the data on the server was signed by them and proving it hasn't been tampered with
-
-    // if you have a login system on your site you could also allow people to claim that SHA256 hash as their own, so stats can be linked to a login/pw
-    // could also maybe allow people to upload their cfg to backup priv keys too
-
-    // console.log("verified:", isValidSig, req.body);
-
-    res.send({
-        result: {
-            code: 0,
-            msg: "OK"
-        }
-    });
-});
-
 http.createServer(app).listen(appPortNumber, "0.0.0.0", function() {
     console.log('Listening on port ' + appPortNumber);
+    setup();
 });
