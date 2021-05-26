@@ -235,20 +235,20 @@ app.get("/list", function(req, res) {
             client.hgetall(uri + ":info", function(err, obj) {
                 // can this be simplified? things i've read from ~2010 say this is the best way
                 if (err || typeof obj === undefined || !obj || typeof obj.lastUpdate === undefined || !obj.lastUpdate || obj.lastUpdate === 0) {
-                    return callback(false);
+                    return callback(null, false);
                 }
 
                 var currentTime = Math.floor(Date.now() / 1000);
                 var lastUpdate = parseInt(obj.lastUpdate);
                 if (currentTime - lastUpdate > serverContactTimeLimit) {
-                    return callback(false);
+                    return callback(null, false);
                 }
 
-                callback(true);
+                callback(null, true);
             });
         }
 
-        async.filter(result, isServerAvailable, function(results) {
+        async.filter(result, isServerAvailable, function(err, results) {
             returnData.result.servers = results;
             return res.send(returnData);
         });
